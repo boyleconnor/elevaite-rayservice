@@ -4,7 +4,6 @@ import numpy as np
 from ray import serve
 
 # These imports are used only for type hints:
-from typing import Dict
 from starlette.requests import Request
 from transformers import pipeline
 
@@ -37,7 +36,7 @@ def numpy_to_std(obj):
 
 
 @serve.deployment(num_replicas=2)
-class FruitMarket:
+class ModelDeployment:
     def __init__(self):
         model_name = os.getenv("MODEL_NAME", "dslim/bert-base-NER")
         self.pipe = pipeline(model=model_name)
@@ -48,4 +47,4 @@ class FruitMarket:
         kwargs = request_json["kwargs"]
         return numpy_to_std(self.pipe(*args, **kwargs))
 
-deployment_graph = FruitMarket.bind()
+deployment_graph = ModelDeployment.bind()
