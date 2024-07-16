@@ -1,90 +1,51 @@
+import os
+
+import numpy as np
 from ray import serve
-from ray.serve.handle import DeploymentHandle
 
 # These imports are used only for type hints:
 from typing import Dict
 from starlette.requests import Request
+from transformers import pipeline
+
+
+def numpy_to_std(obj):
+    """Convert all objects in dict (recursively) from numpy types to vanilla
+    Python types."""
+    if isinstance(obj, list):
+        new_obj = []
+        for item in obj:
+            new_obj.append(numpy_to_std(item))
+        return new_obj
+    elif isinstance(obj, dict):
+        new_obj = {}
+        for key, value in obj.items():
+            if type(key) is not str:
+                raise TypeError(
+                    f"Dictionary contains invalid key {key!r}; {type(key)=}"
+                )
+            new_obj[key] = numpy_to_std(value)
+        return new_obj
+    elif type(obj) in (int, float, str):
+        return obj
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    else:
+        raise TypeError(f"Could not serialize evaluation object: {obj}")
 
 
 @serve.deployment(num_replicas=2)
 class FruitMarket:
-    def __init__(
-        self,
-        mango_stand: DeploymentHandle,
-        orange_stand: DeploymentHandle,
-        pear_stand: DeploymentHandle,
-    ):
-        self.directory = {
-            "MANGO": mango_stand.options(use_new_handle_api=True),
-            "ORANGE": orange_stand.options(use_new_handle_api=True),
-            "PEAR": pear_stand.options(use_new_handle_api=True),
-        }
-
-    async def check_price(self, fruit: str, amount: float) -> float:
-        if fruit not in self.directory:
-            return -1
-        else:
-            fruit_stand = self.directory[fruit]
-            return await fruit_stand.check_price.remote(amount)
-
-    async def __call__(self, request: Request) -> float:
-        fruit, amount = await request.json()
-        return await self.check_price(fruit, amount)
-
-
-@serve.deployment(user_config={"price": 3})
-class MangoStand:
-
-    DEFAULT_PRICE = 1
-
     def __init__(self):
-        # This default price is overwritten by the one specified in the
-        # user_config through the reconfigure() method.
-        self.price = self.DEFAULT_PRICE
+        model_name = os.getenv("MODEL_NAME", "dslim/bert-base-NER")
+        self.pipe = pipeline(model=model_name)
 
-    def reconfigure(self, config: Dict):
-        self.price = config.get("price", self.DEFAULT_PRICE)
+    async def __call__(self, request: Request) -> dict:
+        request_json = await request.json()
+        args = request_json["args"]
+        kwargs = request_json["kwargs"]
+        return numpy_to_std(self.pipe(*args, **kwargs))
 
-    def check_price(self, amount: float) -> float:
-        return self.price * amount
-
-
-@serve.deployment(user_config={"price": 2})
-class OrangeStand:
-
-    DEFAULT_PRICE = 0.5
-
-    def __init__(self):
-        # This default price is overwritten by the one specified in the
-        # user_config through the reconfigure() method.
-        self.price = self.DEFAULT_PRICE
-
-    def reconfigure(self, config: Dict):
-        self.price = config.get("price", self.DEFAULT_PRICE)
-
-    def check_price(self, amount: float) -> float:
-        return self.price * amount
-
-
-@serve.deployment(user_config={"price": 4})
-class PearStand:
-
-    DEFAULT_PRICE = 0.75
-
-    def __init__(self):
-        # This default price is overwritten by the one specified in the
-        # user_config through the reconfigure() method.
-        self.price = self.DEFAULT_PRICE
-
-    def reconfigure(self, config: Dict):
-        self.price = config.get("price", self.DEFAULT_PRICE)
-
-    def check_price(self, amount: float) -> float:
-        return self.price * amount
-
-
-mango_stand = MangoStand.bind()
-orange_stand = OrangeStand.bind()
-pear_stand = PearStand.bind()
-
-deployment_graph = FruitMarket.bind(mango_stand, orange_stand, pear_stand)
+deployment_graph = FruitMarket.bind()
