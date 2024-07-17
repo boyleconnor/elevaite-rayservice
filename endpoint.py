@@ -1,11 +1,16 @@
 import os
+from typing import Any
 
 import numpy as np
+from fastapi import FastAPI
+from pydantic import BaseModel
 from ray import serve
 
 # These imports are used only for type hints:
 from starlette.requests import Request
 from transformers import pipeline
+
+app = FastAPI()
 
 
 def numpy_to_std(obj):
@@ -34,17 +39,30 @@ def numpy_to_std(obj):
     else:
         raise TypeError(f"Could not serialize evaluation object: {obj}")
 
+model_name = os.getenv("MODEL_NAME", "dslim/bert-base-NER")
+pipe = pipeline(model=model_name)
+
+
+class InferenceRequest(BaseModel):
+    args: list[Any]
+    kwargs: dict[str, Any]
+
 
 @serve.deployment(num_replicas=2)
+@serve.ingress(app)
 class ModelDeployment:
     def __init__(self):
         model_name = os.getenv("MODEL_NAME", "dslim/bert-base-NER")
         self.pipe = pipeline(model=model_name)
 
-    async def __call__(self, request: Request) -> dict:
-        request_json = await request.json()
-        args = request_json["args"]
-        kwargs = request_json["kwargs"]
-        return numpy_to_std(self.pipe(*args, **kwargs))
+    @app.post("/infer")
+    def infer(self, inference_request: InferenceRequest) -> dict:
+        args = inference_request.args
+        kwargs = inference_request.kwargs
+        return {"result": numpy_to_std(self.pipe(*args, **kwargs))}
+
+    @app.get("/model_config")
+    def model_config(self):
+        return self.pipe.model.config
 
 deployment_graph = ModelDeployment.bind()
