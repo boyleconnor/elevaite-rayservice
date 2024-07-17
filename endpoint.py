@@ -65,4 +65,4 @@ class ModelDeployment:
     def model_config(self):
         return self.pipe.model.config
 
-deployment_graph = ModelDeployment.bind()
+deployment = ModelDeployment.bind()
