@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, List, Dict
 
 import numpy as np
 from fastapi import FastAPI
@@ -43,8 +43,8 @@ model_name = os.getenv("MODEL_NAME", "dslim/bert-base-NER")
 
 
 class InferenceRequest(BaseModel):
-    args: list[Any]
-    kwargs: dict[str, Any]
+    args: List[Any]
+    kwargs: Dict[str, Any]
 
 
 @serve.deployment
