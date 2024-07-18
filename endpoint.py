@@ -48,7 +48,7 @@ class InferenceRequest(BaseModel):
     kwargs: dict[str, Any]
 
 
-@serve.deployment(num_replicas=2)
+@serve.deployment
 @serve.ingress(app)
 class ModelDeployment:
     def __init__(self):
