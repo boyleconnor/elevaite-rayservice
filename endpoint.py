@@ -40,7 +40,6 @@ def numpy_to_std(obj):
         raise TypeError(f"Could not serialize evaluation object: {obj}")
 
 model_name = os.getenv("MODEL_NAME", "dslim/bert-base-NER")
-pipe = pipeline(model=model_name)
 
 
 class InferenceRequest(BaseModel):
